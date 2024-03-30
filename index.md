@@ -2,7 +2,6 @@
 layout: default
 ---
 
-
 [![Generic badge](https://img.shields.io/badge/PICROSS-DONE-chartreuse.svg)](https://shields.io/)
 - Creation of a _generic_ picross instance, loaded with ad-hoc `.px` files.
 - Creation of a picross-solver class, taking the `.px` file location as an input
