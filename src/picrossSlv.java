@@ -10,9 +10,17 @@ import static org.chocosolver.solver.search.strategy.Search.setVarSearch;
 
 public class picrossSlv extends picross{
     private final IntVar[][] grid;
+    // grid[i][j] is a boolean
+    //      grid[i][j] = 1 iff the (i, j) cell has been blacked
+
     private IntVar[][] startX;
+    // startX[r][p] is the position at which the p-th bloc of row r begins
+
     private IntVar[][] startY;
+    // startY[c][q] is the position at which the q-th bloc of column c begins
+
     private final Model picrossModel;
+
 
     public IntVar[] get_jth_col(int j){
         IntVar[] jth_col = new IntVar[getNbrows()];
@@ -21,8 +29,10 @@ public class picrossSlv extends picross{
     }
 
     public picrossSlv(String filename) throws Exception {
+        // Reading the input file to get the dimensions and constraints
         super(filename);
 
+        // Initialization of the variables arrays
         this.grid = new IntVar[getNbrows()][getNbcols()];
         startX = new IntVar[getNbrows()][];
         startY = new IntVar[getNbcols()][];
@@ -32,11 +42,10 @@ public class picrossSlv extends picross{
 
         picrossModel = new Model("picrossModel");
 
-        // NOTE : Variable creation
-        // Boolean variables in grid
+        // Creation of the variables themselves
         for (int i = 0; i < getNbrows(); i++) {
             for (int j = 0; j < getNbcols(); j++) {
-                grid[i][j] = picrossModel.intVar("x[" + i + "][" + j + "]", 0, 1);
+                grid[i][j] = picrossModel.boolVar("x[" + i + "][" + j + "]");
             }
         }
 
@@ -52,36 +61,37 @@ public class picrossSlv extends picross{
             }
         }
 
-
-        // On each row, the correct nb. of cells will be shaded
+        // CONSTRAINT 1A :
+        //          On each row, count how many cells have been checked
         for (int i = 0; i < getNbrows(); i++) {
             picrossModel.sum(grid[i], "=", Arrays.stream(getRow_constraints(i)).sum()).post();
         }
 
-        // On each column, the correct nb. of cells will be shaded
+        // CONSTRAINT 1B :
+        //          On each column, count how many cells have been checked
         for (int j = 0; j < getNbcols(); j++) {
             picrossModel.sum(get_jth_col(j), "=", Arrays.stream(getCol_constraints(j)).sum()).post();
         }
 
-        // sX[i][k + 1] - sX[i][k] >= rC(i)[k] + 1
-        // sX[i][k + 1] >= sX[i][k] + rC(i)[k] + 1
-        // The start of the next block in the row is set after the previous one
+        // CONSTRAINT 1C :
+        //          On each row, enforces that the (k + 1)-th bloc starts after the end of the k-th
         for (int i = 0; i < getNbrows(); i++) {
             for (int k = 0; k < getRow_constraints(i).length - 1; k++) {
                 picrossModel.arithm(startX[i][k + 1], "-", startX[i][k], ">=", getRow_constraints(i)[k] + 1).post();
             }
         }
 
-        // sY[j][l + 1] - sY[j][l] >= cC(j)[l] + 1
-        // sY[j][l + 1] >= sY[j][l] + cC(j)[l] + 1
+        // CONSTRAINT 1D :
+        //          On each column, enforces that the (l + 1)-th bloc starts after the end of the l-th
         for (int j = 0; j < getNbcols(); j++) {
             for (int l = 0; l < getCol_constraints(j).length - 1; l++) {
                 picrossModel.arithm(startY[j][l + 1], "-", startY[j][l], ">=", getCol_constraints(j)[l] + 1).post();
             }
         }
 
-        // Cell (i, j) is lit iff there is a bloc in row i that has
-        // either began at position j, or has began before j (but not "too" soon)
+        // CONSTRAINT 1E :
+        //          On each row, a cell is active iff there is a bloc that starts 
+        //          neither too late, neither too *early*
         for (int i = 0; i < getNbrows(); i++) {
             for (int j = 0; j < getNbcols(); j++) {
                 BoolVar[] row_activ = picrossModel.boolVarArray("row_activ_" + i + "_" + j, getRow_constraints(i).length);
@@ -94,8 +104,9 @@ public class picrossSlv extends picross{
             }
         }
 
-        // Cell (i, j) is lit iff there is a bloc in column j that has
-        // either began at position i, or has begun before i (but not "too" soon)
+        // CONSTRAINT 1F :
+        //          On each column, a cell is active iff there is a bloc that starts 
+        //          neither too late, neither too *early*
         for (int j = 0; j < getNbcols(); j++) {
             for (int i = 0; i < getNbrows(); i++) {
                 BoolVar[] col_activ = picrossModel.boolVarArray("col_activ_" + j + "_" + i, getCol_constraints(j).length);
@@ -108,100 +119,93 @@ public class picrossSlv extends picross{
             }
         }
 
-        // The k-th bloc of row (i) cannot start "before" (k-1)-th before have been set up
-        for (int i = 0; i < getNbrows(); i++) {
-            for (int k = 0; k < getRow_constraints(i).length; k++) {
-                int sum_proc_before = 0;
-                for (int k_pr = 0; k_pr < k; k_pr++) {
-                    sum_proc_before += getRow_constraints(i)[k_pr];
-                }
-                picrossModel.arithm(startX[i][k], ">=", sum_proc_before + k).post();
-            }
-        }
+        // // CONSTRAINT 1G :
+        // //          On each row, the k-th bloc starts after all the (k' < k) have been placed
+        // //          It includes the "blank space" between two consecutive blocs
+        // for (int i = 0; i < getNbrows(); i++) {
+        //     for (int k = 0; k < getRow_constraints(i).length; k++) {
+        //         int sum_proc_before = 0;
+        //         for (int k_pr = 0; k_pr < k; k_pr++) {
+        //             sum_proc_before += getRow_constraints(i)[k_pr];
+        //         }
+        //         picrossModel.arithm(startX[i][k], ">=", sum_proc_before + k).post();
+        //     }
+        // }
 
-        // Same for columns
-        for (int j = 0; j < getNbcols(); j++) {
-            for (int l = 0; l < getCol_constraints(j).length; l++) {
-                int sum_proc_before = 0;
-                for (int l_pr = 0; l_pr < l; l_pr++) {
-                    sum_proc_before += getCol_constraints(j)[l_pr];
-                }
-                picrossModel.arithm(startY[j][l], ">=", sum_proc_before + l).post();
-            }
-        }
+        // // CONSTRAINT 1H :
+        // //          On each column, the l-th bloc starts after all the (l' < l) have been placed
+        // //          It includes the "blank space" between two consecutive blocs
+        // for (int j = 0; j < getNbcols(); j++) {
+        //     for (int l = 0; l < getCol_constraints(j).length; l++) {
+        //         int sum_proc_before = 0;
+        //         for (int l_pr = 0; l_pr < l; l_pr++) {
+        //             sum_proc_before += getCol_constraints(j)[l_pr];
+        //         }
+        //         picrossModel.arithm(startY[j][l], ">=", sum_proc_before + l).post();
+        //     }
+        // }
 
-        // The k-th bloc of row (i) cannot start too late
-        for (int i = 0; i < getNbrows(); i++) {
-            for (int k = 0; k < getRow_constraints(i).length; k++) {
-                int sumrow = 0;
-                for (int kpr = k; kpr < getRow_constraints(i).length; kpr++) {
-                    sumrow += getRow_constraints(i)[kpr];
-                }
-                picrossModel.arithm(startX[i][k], "<=", getNbcols() - getRow_constraints(i).length + k + 1 - sumrow).post();
-            }
-        }
+        // // CONSTRAINT 1I :
+        // //          Limits, on each row, what's the biggest position at which the k-th bloc can start
+        // for (int i = 0; i < getNbrows(); i++) {
+        //     for (int k = 0; k < getRow_constraints(i).length; k++) {
+        //         int sumrow = 0;
+        //         for (int kpr = k; kpr < getRow_constraints(i).length; kpr++) {
+        //             sumrow += getRow_constraints(i)[kpr];
+        //         }
+        //         picrossModel.arithm(startX[i][k], "<=", getNbcols() - getRow_constraints(i).length + k + 1 - sumrow).post();
+        //     }
+        // }
 
-        // The l-th bloc of column (j) cannot start too late
-        for (int j = 0; j < getNbcols(); j++) {
-            for (int l = 0; l < getCol_constraints(j).length; l++) {
-                int sumcol = 0;
-                for (int lpr = l; lpr < getCol_constraints(j).length; lpr++) {
-                    sumcol += getCol_constraints(j)[lpr];
-                }
-                picrossModel.arithm(startY[j][l], "<=", getNbrows() - getCol_constraints(j).length + l + 1 - sumcol).post();
-            }
-        }
+        // // CONSTRAINT 1J :
+        // //          Limits, on each column, what's the biggest position at which the l-th bloc can start
 
-        // If a bloc in a row starts at a given position
-        //      1. I can put an unshaded cell before
-        //      2. I can put an unshaded cell after
+        // for (int j = 0; j < getNbcols(); j++) {
+        //     for (int l = 0; l < getCol_constraints(j).length; l++) {
+        //         int sumcol = 0;
+        //         for (int lpr = l; lpr < getCol_constraints(j).length; lpr++) {
+        //             sumcol += getCol_constraints(j)[lpr];
+        //         }
+        //         picrossModel.arithm(startY[j][l], "<=", getNbrows() - getCol_constraints(j).length + l + 1 - sumcol).post();
+        //     }
+        // }
 
-        for (int i = 0; i < getNbrows(); i++) {
-            for (int ki = 0; ki < getRow_constraints(i).length; ki++) {
-                for (int j = 0; j < getNbcols(); j++) {
-                    if (j > 0) {
-                        startX[i][ki].eq(j).imp(grid[i][j - 1].eq(0)).post();
-                    }
-                    if (j + getRow_constraints(i)[ki] < getNbcols()) {
-                        startX[i][ki].eq(j).imp(grid[i][j + getRow_constraints(i)[ki]].eq(0)).post();
-                    }
-                }
-            }
-        }
 
-        for (int i = 0; i < getNbrows(); i++){
-            for (int ki = 0; ki < getRow_constraints(i).length; ki++){
-                for (int j = 0; j < getNbcols(); j++){
-                    // If startX[i][ki].eq(j) ==> each bloc in the proper must be == to 1
-                    int d = 0;
-                    while (d < getRow_constraints(i)[ki] && j+d < getNbcols()){
-                        startX[i][ki].eq(j).imp(grid[i][j+d].eq(1)).post();
-                        d++;
-                    }
-                }
-            }
-        }
 
-        // Same for columns
-        for (int j = 0; j < getNbcols(); j++) {
-            for (int kj = 0; kj < getCol_constraints(j).length; kj++) {
-                for (int i = 0; i < getNbrows(); i++) {
-                    if (i > 0) {
-                        startY[j][kj].eq(i).imp(grid[i - 1][j].eq(0)).post();
-                    }
-                    if (i + getCol_constraints(j)[kj] < getNbrows()) {
-                        startY[j][kj].eq(i).imp(grid[i + getCol_constraints(j)[kj]][j].eq(0)).post();
-                    }
-                }
-            }
-        }
+        // for (int i = 0; i < getNbrows(); i++) {
+        //     for (int ki = 0; ki < getRow_constraints(i).length; ki++) {
+        //         for (int j = 0; j < getNbcols(); j++) {
+        //             // CONSTRAINT 1K :
+        //             //      In a row, puts an un-checked cell exactly before the start of a bloc
+        //             if (j > 0) {
+        //                 startX[i][ki].eq(j).imp(grid[i][j - 1].eq(0)).post();
+        //             }
+        //             // CONSTRAINT 1M :
+        //             //      In a column, puts an un-checked cell exactly after the end of a bloc 
+        //             if (j + getRow_constraints(i)[ki] < getNbcols()) {
+        //                 startX[i][ki].eq(j).imp(grid[i][j + getRow_constraints(i)[ki]].eq(0)).post();
+        //             }
+        //         }
+        //     }
+        // }
 
-        // startX[i][s] = j ==> forall(0 <= d < rC(i)[s] | j+d < #C) grid[i][j + d] = 1
-        // TODO :
-        /*
-                1. Construire le tableau des grid[i][j+d], forall(0 <= d < rC(i)[s] | j+d < #C)
-                2. picrossModel.and(tableau1).reifyWith(picrossModel.arithm(grid[i][j], "=", 1).reify());
-         */
+        // for (int j = 0; j < getNbcols(); j++) {
+        //     for (int kj = 0; kj < getCol_constraints(j).length; kj++) {
+        //         for (int i = 0; i < getNbrows(); i++) {
+        //             // CONSTRAINT 1L :
+        //             //      In a column, puts un un-checked cell exactly before the start of a bloc
+        //             if (i > 0) {
+        //                 startY[j][kj].eq(i).imp(grid[i - 1][j].eq(0)).post();
+        //             }
+
+        //             // CONSTRAINT 1N :
+        //             //      In a column, puts un un-checked cell exactly after the end of a bloc
+        //             if (i + getCol_constraints(j)[kj] < getNbrows()) {
+        //                 startY[j][kj].eq(i).imp(grid[i + getCol_constraints(j)[kj]][j].eq(0)).post();
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     public int[][] nextSolution(){
@@ -237,6 +241,7 @@ public class picrossSlv extends picross{
         return vals;
 
     }
+
     public void displaysol(int[][] sol){
         if (sol == null){
             System.out.println("+++ null solution found. +++");
@@ -256,6 +261,7 @@ public class picrossSlv extends picross{
         }
     }
 
+
     public static void main(String[] args) {
         String filename = args[0];
         picrossSlv picross = null;
@@ -267,8 +273,6 @@ public class picrossSlv extends picross{
             int[][] sol = picross.nextSolution();
             if (sol != null) {
                 picross.displaysol(sol);
-            } else {
-                System.out.println("!!! Null solution found !!!");
             }
         } catch (Exception e) {
             System.out.println("[picrossSlv] Instance creation has failed");

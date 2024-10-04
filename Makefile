@@ -2,7 +2,7 @@
 # Picross Solver | Constraint Programming | Choco 🍫 #
 # -------------------------------------------------- #
 
-CHOCOJAR = /home/benoit/choco-parsers-4.10.14-light.jar
+CHOCOJAR = /home/benoit/choco-solver-4.10.17-light.jar
 
 JAVAC = javac
 JAVA = java
