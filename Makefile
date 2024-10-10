@@ -32,7 +32,7 @@ solve: buildsolver
 	@$(JAVA) -Xmx1024M -Xms1024M $(JOPT) -cp $(CHOCOJAR):$(SRCDIR) picrossSlv $(GRID) $(CONSTRAINTS) 
 
 benchmark: buildsolver
-	@clear; for grid in picross/*.px; do clear; echo Running solver on file "$$grid"...; $(JAVA) $(JOPT) -cp $(CHOCOJAR):$(SRCDIR) picrossSlv "$$grid" $(CONSTRAINTS); echo; sleep 5; done
+	@clear; for grid in picross/*.px; do clear; echo Running solver on file "$$grid"...; $(JAVA) $(JOPT) -cp $(CHOCOJAR):$(SRCDIR) picrossSlv "$$grid" $(CONSTRAINTS); echo; sleep 2; done
 
 clean:
 	@rm -f $(SRCDIR)/*.class

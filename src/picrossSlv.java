@@ -235,6 +235,110 @@ public class picrossSlv extends picross{
         }
     }
 
+    public boolean check_solution(int[][] sol, int[][] start_x, int[][] start_y){
+        // precRC : Checking, in every row and every column if precedence between blocks is satisfied
+        // precR
+        for (int i = 0; i < getNbrows(); i++){
+            int[] row_i_constraints = getRow_constraints(i);
+            for (int k = 0; k < row_i_constraints.length - 1; k++){
+                if (start_x[i][k + 1] < start_x[i][k] + row_i_constraints[k] + 1){
+                    return false;
+                }
+            }
+        }
+        // precC
+        for (int j = 0; j < getNbcols(); j++){
+            int[] col_j_constraints = getCol_constraints(j);
+            for (int l = 0; l < col_j_constraints.length - 1; l++){
+                if (start_y[j][l + 1] < start_y[j][l] + col_j_constraints[l] + 1){
+                    return false;
+                }
+            }
+        }
+
+        // fitRC : Checking if each start is within the row / column
+        //         Also checks for the end of each bloc is w. row/col
+        // fitR
+        for (int i = 0; i < getNbrows(); i++){
+            int[] row_i_constraints = getRow_constraints(i);
+            for (int k = 0; k < row_i_constraints.length; k++){
+                if ((start_x[i][k] > getNbcols()) || (start_x[i][k] + row_i_constraints[k] > getNbcols())){
+                    return false;
+                }
+            }
+        }
+        // fitC
+        for (int j = 0; j < getNbcols(); j++){
+            int[] col_j_constraints = getCol_constraints(j);
+            for (int l = 0; l < col_j_constraints.length; l++){
+                if ((start_y[j][l] > getNbrows()) || (start_y[j][l] + col_j_constraints[l] > getNbrows())){
+                    return false;
+                }
+            }
+        }
+
+        // fillRC : Enforces the link between grid[i][j] and startX, startY
+        // fillR : startX <-> grid
+        for (int i = 0; i < getNbrows(); i++){
+            int[] row_i_constraints = getRow_constraints(i);
+            for (int k = 0; k < row_i_constraints.length; k++){
+                int r_ik = row_i_constraints[k];
+                int sx_ik = start_x[i][k];
+                for (int j = 0; j < r_ik; j++){
+                    if (sol[i][sx_ik + j] == 0){
+                        return false;
+                    }
+                }
+            }   
+        }
+        // fillC : startY <-> grid
+        for (int j = 0; j < getNbcols(); j++){
+            int[] col_j_constraints = getCol_constraints(j);
+            for (int l = 0; l < col_j_constraints.length; l++){
+                int c_jl = col_j_constraints[l];
+                int sy_jl = start_y[j][l];
+                for (int i = 0; i < c_jl; i++){
+                    if (sol[sy_jl + i][j] == 0){
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // countRC : Enforces that exactly the right amount of cells have been checked
+        // countR
+        for (int i = 0; i < getNbrows(); i++){
+            int[] row_i_constraints = getRow_constraints(i);
+            int lhs_ric = 0;
+            for (int r_ik : row_i_constraints){
+                lhs_ric = lhs_ric + r_ik;
+            }
+            int rhs_ric = 0;
+            for (int b_ij : sol[i]){
+                rhs_ric = rhs_ric + b_ij;
+            }
+            if (lhs_ric != rhs_ric){
+                return false;
+            }
+        }
+        // countC
+        for (int j = 0; j < getNbcols(); j++){
+            int[] col_j_constraints = getCol_constraints(j);
+            int lhs_cjc = 0;
+            for (int c_jl : col_j_constraints){
+                lhs_cjc = lhs_cjc + c_jl;
+            }
+            int rhs_cjc = 0;
+            for (int i = 0; i < getNbrows(); i++){
+                rhs_cjc = rhs_cjc + sol[i][j];
+            }
+            if (lhs_cjc != rhs_cjc){
+                return false;
+            }
+        }
+        return true;
+    }
+
     public int[][] nextSolution(){
         Solver solver = picrossModel.getSolver();
         solver.limitTime("60s");
@@ -247,6 +351,49 @@ public class picrossSlv extends picross{
                 }
             }
             solver.printStatistics();
+        } else if(solver.hasEndedUnexpectedly()){
+            System.out.println("Le solveur s'est arrêté de manière inattendue.");
+        }
+        return sol;
+    }
+
+    public int[][] checkNextSolution(){
+        Solver solver = picrossModel.getSolver();
+        solver.limitTime("60s");
+        int[][] sol = null;
+        int[][] start_x = null;
+        int[][] start_y = null;
+        if (solver.solve()){
+            sol = new int[getNbrows()][getNbcols()];
+            for (int i = 0; i < getNbrows(); i++){
+                for (int j = 0; j < getNbcols(); j++){
+                    sol[i][j] = grid[i][j].getValue();
+                }
+            }
+
+            start_x = new int[getNbrows()][];
+            for (int i = 0; i < getNbrows(); i++){
+                int[] row_i_constraints = getRow_constraints(i);
+                start_x[i] = new int[row_i_constraints.length];
+                for (int k = 0; k < row_i_constraints.length; k++){
+                    start_x[i][k] = startX[i][k].getValue();
+                }
+            }
+            start_y = new int[getNbcols()][];
+            for (int j = 0; j < getNbcols(); j++){
+                int[] col_j_constraints = getCol_constraints(j);
+                start_y[j] = new int[col_j_constraints.length];
+                for (int l = 0; l < col_j_constraints.length; l++){
+                    start_y[j][l] = startY[j][l].getValue();
+                }
+            }
+            solver.printStatistics();
+            if (check_solution(sol, start_x, start_y)){
+                System.out.println("The proposed solution is valid : ✅");
+            } else {
+                System.out.println("The proposed solution is NOT valid : ❌");
+                sol = null;
+            }
         } else if(solver.hasEndedUnexpectedly()){
             System.out.println("Le solveur s'est arrêté de manière inattendue.");
         }
@@ -299,7 +446,7 @@ public class picrossSlv extends picross{
             int[][] prop = picross.propagate();
             picross.displaysol(prop);
 
-            int[][] sol = picross.nextSolution();
+            int[][] sol = picross.checkNextSolution();
             if (sol != null) {
                 picross.displaysol(sol);
             }
