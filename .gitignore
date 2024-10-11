@@ -1,3 +1,4 @@
+graph_outputs/graph*
 outputs/*.json
 src/picross.class
 src/picrossSlv.class
