@@ -8,7 +8,14 @@ import java.util.Arrays;
 import static org.chocosolver.solver.search.strategy.Search.intVarSearch;
 import static org.chocosolver.solver.search.strategy.Search.setVarSearch;
 
+import java.io.FileWriter;
+import java.io.IOException;
+
 public class picrossSlv extends picross{
+    private Solver solver;
+    private String model_name;
+    private final String chosen_constraints;
+
     private final IntVar[][] grid;
     // grid[i][j] is a boolean
     //      grid[i][j] = 1 iff the (i, j) cell has been blacked
@@ -31,7 +38,9 @@ public class picrossSlv extends picross{
     public picrossSlv(String filename, String active_constraints) throws Exception {
         // Reading the input file to get the dimensions and constraints
         super(filename);
-
+        chosen_constraints = active_constraints;
+        model_name = filename.substring(8, filename.length() - 3) + "_" + active_constraints;
+        System.out.println("Solving [" + model_name + "]");
         // Initialization of the variables arrays
         this.grid = new IntVar[getNbrows()][getNbcols()];
         startX = new IntVar[getNbrows()][];
@@ -63,7 +72,7 @@ public class picrossSlv extends picross{
 
         boolean is_ab_active = active_constraints.contains(Character.toString('A'));
         if (is_ab_active){
-            System.out.println("Enabling constraints {a, b}.");
+            // System.out.println("Enabling constraints {a, b}.");
             // Set of constraints A = {a, b}
             // CONSTRAINT 1a :
             //          On each row, count how many cells have been checked
@@ -80,7 +89,7 @@ public class picrossSlv extends picross{
 
         boolean is_cd_active = active_constraints.contains(Character.toString('B'));
         if (is_cd_active){
-            System.out.println("Enabling constraints {c, d}.");
+            // System.out.println("Enabling constraints {c, d}.");
             // Set of constraints B = {c, d}
             // CONSTRAINT 1c :
             //          On each row, enforces that the (k + 1)-th bloc starts after the end of the k-th
@@ -101,7 +110,7 @@ public class picrossSlv extends picross{
 
         boolean is_ef_active = active_constraints.contains(Character.toString('C'));
         if (is_ef_active){
-            System.out.println("Enabling constraints {e, f}.");
+            // System.out.println("Enabling constraints {e, f}.");
             // Set of constraints C = {e, f}
             // CONSTRAINT 1e :
             //          On each row, a cell is active iff there is a bloc that starts 
@@ -136,7 +145,7 @@ public class picrossSlv extends picross{
 
         boolean is_gh_active = active_constraints.contains(Character.toString('D'));
         if (is_gh_active){
-            System.out.println("Enabling constraints {g, h}.");
+            // System.out.println("Enabling constraints {g, h}.");
             // Set of constraints D = {g, h}
             // CONSTRAINT 1g :
             //          On each row, the k-th bloc starts after all the (k' < k) have been placed
@@ -167,7 +176,7 @@ public class picrossSlv extends picross{
 
         boolean is_ij_active = active_constraints.contains(Character.toString('E'));
         if (is_ij_active){
-            System.out.println("Enabling constraints {i, j}.");
+            // System.out.println("Enabling constraints {i, j}.");
             // CONSTRAINT 1I :
             //          Limits, on each row, what's the biggest position at which the k-th bloc can start
             for (int i = 0; i < getNbrows(); i++) {
@@ -196,7 +205,7 @@ public class picrossSlv extends picross{
 
         boolean is_klmn_active = active_constraints.contains(Character.toString('F'));
         if (is_klmn_active){
-            System.out.println("Enabling constraints {k, l, m, n}.");
+            // System.out.println("Enabling constraints {k, l, m, n}.");
             // Set of constraints K, M, L, N
             for (int i = 0; i < getNbrows(); i++) {
                 for (int ki = 0; ki < getRow_constraints(i).length; ki++) {
@@ -339,26 +348,8 @@ public class picrossSlv extends picross{
         return true;
     }
 
-    public int[][] nextSolution(){
-        Solver solver = picrossModel.getSolver();
-        solver.limitTime("60s");
-        int[][] sol = null;
-        if (solver.solve()){
-            sol = new int[getNbrows()][getNbcols()];
-            for (int i = 0; i < getNbrows(); i++){
-                for (int j = 0; j < getNbcols(); j++){
-                    sol[i][j] = grid[i][j].getValue();
-                }
-            }
-            solver.printStatistics();
-        } else if(solver.hasEndedUnexpectedly()){
-            System.out.println("Le solveur s'est arrêté de manière inattendue.");
-        }
-        return sol;
-    }
-
     public int[][] checkNextSolution(){
-        Solver solver = picrossModel.getSolver();
+        solver = picrossModel.getSolver();
         solver.limitTime("60s");
         int[][] sol = null;
         int[][] start_x = null;
@@ -387,13 +378,10 @@ public class picrossSlv extends picross{
                     start_y[j][l] = startY[j][l].getValue();
                 }
             }
-            solver.printStatistics();
-            if (check_solution(sol, start_x, start_y)){
-                System.out.println("The proposed solution is valid : ✅");
-            } else {
-                System.out.println("The proposed solution is NOT valid : ❌");
+            if (!check_solution(sol, start_x, start_y)){
                 sol = null;
             }
+            
         } else if(solver.hasEndedUnexpectedly()){
             System.out.println("Le solveur s'est arrêté de manière inattendue.");
         }
@@ -437,19 +425,57 @@ public class picrossSlv extends picross{
     }
 
 
+    public void export_results(){
+        int[][] sol = checkNextSolution();
+        long[] outputs = new long[4];
+        String[] categories = {"is_valid", "fail_count", "node_count", "solving_time"};
+        if (sol != null){
+            System.out.println("[" + model_name + "] - ✅");
+            displaysol(sol);
+            outputs[0] = 1;
+        } else {
+            System.out.println("[" + model_name + "] - ❌");
+            outputs[0] = 0;
+        }
+        outputs[1] = solver.getFailCount();
+        outputs[2] = solver.getNodeCount();
+        outputs[3] = solver.getTimeToBestSolutionInNanoSeconds();
+
+    StringBuilder content = new StringBuilder();
+    content.append("{");
+    for (int i = 0; i < categories.length; i++) {
+        content.append("\"" + categories[i] + "\"").append(": ").append(outputs[i]);
+        if (i < categories.length - 1){
+            content.append(",\n");
+        }
+    }
+    content.append("}");
+
+    // Écrire le contenu dans un fichier texte
+    try (FileWriter file = new FileWriter("outputs/" + model_name + ".json")) {
+        file.write(content.toString());
+        file.flush();
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+
+    }
+
     public static void main(String[] args) {
         String filename = args[0];
         String constraints = args[1];
         picrossSlv picross = null;
         try {
             picross = new picrossSlv(filename, constraints);
-            int[][] prop = picross.propagate();
-            picross.displaysol(prop);
+            // int[][] prop = picross.propagate();
+            // picross.displaysol(prop);
 
-            int[][] sol = picross.checkNextSolution();
-            if (sol != null) {
+            picross.export_results();
+            // int[][] sol = picross.checkNextSolution();
+            /* if (sol != null) {
                 picross.displaysol(sol);
-            }
+            } */
+
         } catch (Exception e) {
             System.out.println("[picrossSlv] Instance creation has failed");
             e.printStackTrace();

@@ -36,5 +36,6 @@ benchmark: buildsolver
 
 clean:
 	@rm -f $(SRCDIR)/*.class
+	@rm -f outputs/*.json
 
 .PHONY: default clean
