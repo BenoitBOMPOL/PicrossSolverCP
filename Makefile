@@ -41,9 +41,6 @@ benchmark: buildsolver
 solveall: buildsolver
 	@clear; for pfile in picross/*.px; do clear; while IFS= read -r cst; do make --no-print-directory solve GRID="$$pfile" CONSTRAINTS="$$cst"; echo; done < constraint_combinations.txt; done
 
-buildgraphs: solveall
-	@clear; for pfile in picross/*.px; do model_name=$(basename "$$pfile" .px); ./export_graph.py "$$model_name"; done
-
 clean:
 	@rm -f graph_outputs/graph*
 	@rm -f $(SRCDIR)/*.class

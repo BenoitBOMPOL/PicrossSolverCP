@@ -18,10 +18,7 @@ def create_graph(base_name: str):
                 vertices.append(cc_)
     
     # Génération des arcs
-    arcs = [(u_, v_) for u_ in vertices for v_ in vertices if (len(v_) == len(u_) + 1) and all(wu_ in v_ for wu_ in u_)]
-    
-    # Points d'entrée (sommets sans prédécesseurs)
-    entry_points = set([u_ for (u_, _) in arcs if u_ not in [w_ for (__, w_) in arcs]])
+    arcs = [(u_, v_) for u_ in vertices for v_ in vertices if (len(v_) > len(u_)) and set(u_).issubset(set(v_))]
     
     # Création du graphe avec graphviz
     dot = graphviz.Digraph(comment='Setup of constraints')
